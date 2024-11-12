@@ -19,7 +19,10 @@ async fn main() {
     let app_key = std::env::var("TWITTER_CONSUMER_KEY").expect("TWITTER_CONSUMER_KEY not set");
     let app_secret =
         std::env::var("TWITTER_CONSUMER_SECRET").expect("TWITTER_CONSUMER_SECRET not set");
-    let twitter = TwitterBuilder::new(app_key, app_secret);
+    let oauth_token = std::env::var("TWITTER_OAUTH_TOKEN").expect("TWITTER_OAUTH_TOKEN not set");
+    let oauth_token_secret =
+        std::env::var("TWITTER_OAUTH_TOKEN_SECRET").expect("TWITTER_OAUTH_TOKEN_SECRET not set");
+    let twitter = TwitterBuilder::new(app_key, app_secret, oauth_token, oauth_token_secret);
 
     let file = File::open("tokens.json").unwrap();
     let reader = BufReader::new(file);
