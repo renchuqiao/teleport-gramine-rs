@@ -11,7 +11,7 @@ use endpoints::{
     approve_mint, callback, cookietest, get_tweet_id, hello_world, mint, redeem, register_or_login,
     SharedState,
 };
-use openssl::pkey::{PKey,Private};
+// use openssl::pkey::{PKey,Private};
 use tokio::{fs, sync::Mutex, time::sleep};
 
 use tower_http::cors::CorsLayer;
@@ -21,7 +21,7 @@ use crate::{
         nft::{nft_action_consumer, subscribe_to_nft_events},
         wallet::get_provider,
     },
-    cert::create_csr,
+    // cert::create_csr,
     db::TeleportDB,
     endpoints::check_redeem,
     twitter::builder::TwitterBuilder,
@@ -44,99 +44,99 @@ const QUOTE_PATH: &str = "untrustedhost/quote.dat";
 
 const WALLET_PATH: &str = "/root/shared/wallet.key";
 
-async fn generate_or_read_privkey() -> PKey<Private> {
-    let tee_url = std::env::var("TEE_URL").expect("TEE_URL not set");
-    let pkey = if std::path::Path::new(PRIVATE_KEY_PATH).exists() {
-        let pk_bytes = fs::read(PRIVATE_KEY_PATH).await.expect("Failed to read pk file");
-        PKey::private_key_from_pem(pk_bytes.as_slice()).unwrap()
-    } else {
-        let pk = create_rsa_key(2048);
-        let pk_bytes = pk.private_key_to_pem_pkcs8().unwrap();
-        fs::write(PRIVATE_KEY_PATH, pk_bytes).await.expect("Failed to write pk to file");
-        pk
-    };
+// async fn generate_or_read_privkey() -> PKey<Private> {
+//     let tee_url = std::env::var("TEE_URL").expect("TEE_URL not set");
+//     let pkey = if std::path::Path::new(PRIVATE_KEY_PATH).exists() {
+//         let pk_bytes = fs::read(PRIVATE_KEY_PATH).await.expect("Failed to read pk file");
+//         PKey::private_key_from_pem(pk_bytes.as_slice()).unwrap()
+//     } else {
+//         let pk = create_rsa_key(2048);
+//         let pk_bytes = pk.private_key_to_pem_pkcs8().unwrap();
+//         fs::write(PRIVATE_KEY_PATH, pk_bytes).await.expect("Failed to write pk to file");
+//         pk
+//     };
 
-    let csr = create_csr(&tee_url, &pkey).unwrap();
-    let csr_pem_bytes = csr.to_pem().unwrap();
-    fs::write(CSR_PATH, csr_pem_bytes).await.expect("Failed to write csr to file");
+//     let csr = create_csr(&tee_url, &pkey).unwrap();
+//     let csr_pem_bytes = csr.to_pem().unwrap();
+//     fs::write(CSR_PATH, csr_pem_bytes).await.expect("Failed to write csr to file");
 
-    pkey
-}
+//     pkey
+// }
 
-async fn wait_for_cert() -> Vec<u8> {
-    log::info!("Waiting for cert ...");
-    while !Path::new(CERTIFICATE_PATH).exists() {
-        sleep(Duration::from_secs(1)).await;
-        }
-    log::info!("Cert found");
-    fs::read(CERTIFICATE_PATH).await.expect("cert not found")
-}
+// async fn wait_for_cert() -> Vec<u8> {
+//     log::info!("Waiting for cert ...");
+//     while !Path::new(CERTIFICATE_PATH).exists() {
+//         sleep(Duration::from_secs(1)).await;
+//         }
+//     log::info!("Cert found");
+//     fs::read(CERTIFICATE_PATH).await.expect("cert not found")
+// }
 
-async fn prepare_quote(pkey: &PKey<Private>, address: String) {
+// async fn prepare_quote(pkey: &PKey<Private>, address: String) {
 
-    // The quote consists of:
-    //   - the public key from the cert,
-    //   - the signer addres
-    let pk_bytes = pkey.public_key_to_pem().unwrap();
-    let appdata = [pk_bytes, address.into_bytes()].concat();
-    if let Ok(quote) = sgx_attest::sgx_attest(appdata) {
-        log::info!("Writing quote to file: {}", QUOTE_PATH);
-        fs::write(QUOTE_PATH, quote).await.expect("Failed to write quote to file");
-    }
-}
+//     // The quote consists of:
+//     //   - the public key from the cert,
+//     //   - the signer addres
+//     let pk_bytes = pkey.public_key_to_pem().unwrap();
+//     let appdata = [pk_bytes, address.into_bytes()].concat();
+//     if let Ok(quote) = sgx_attest::sgx_attest(appdata) {
+//         log::info!("Writing quote to file: {}", QUOTE_PATH);
+//         fs::write(QUOTE_PATH, quote).await.expect("Failed to write quote to file");
+//     }
+// }
 
-async fn _handle_shared_key(State(s): State<Arc<Mutex<Option<oneshot::Sender<String>>>>>,
-			    body: String)
-			    -> String {
-    if let Some(sender) = s.lock().await.take() {
-        let _ = sender.send(body);
-    }
-    "ok".to_string()
-}
+// async fn _handle_shared_key(State(s): State<Arc<Mutex<Option<oneshot::Sender<String>>>>>,
+// 			    body: String)
+// 			    -> String {
+//     if let Some(sender) = s.lock().await.take() {
+//         let _ = sender.send(body);
+//     }
+//     "ok".to_string()
+// }
 
-async fn get_shared_key(cert: Vec<u8>, pkey: PKey<Private>) -> Vec<u8> {
-    // Return the key if we already have it sealed
-    if std::path::Path::new(SHARED_KEY_PATH).exists() {
-	log::info!("reading from shared key file");
-        let s = fs::read(SHARED_KEY_PATH).await.expect("couldn't read shared key");
-        return s;
-    }
+// async fn get_shared_key(cert: Vec<u8>, pkey: PKey<Private>) -> Vec<u8> {
+//     // Return the key if we already have it sealed
+//     if std::path::Path::new(SHARED_KEY_PATH).exists() {
+// 	log::info!("reading from shared key file");
+//         let s = fs::read(SHARED_KEY_PATH).await.expect("couldn't read shared key");
+//         return s;
+//     }
 
-    // Set up the oneshot channel
-    let (tx, rx) = oneshot::channel();
+//     // Set up the oneshot channel
+//     let (tx, rx) = oneshot::channel();
 
-    let shutdown_signal = Arc::new(Mutex::new(Some(tx)));
+//     let shutdown_signal = Arc::new(Mutex::new(Some(tx)));
 
-    // Define the route that handles the shared key
-    let receive_app = axum::Router::new()
-	.route("/shared_key", axum::routing::post(_handle_shared_key))
-	.with_state(shutdown_signal);
+//     // Define the route that handles the shared key
+//     let receive_app = axum::Router::new()
+// 	.route("/shared_key", axum::routing::post(_handle_shared_key))
+// 	.with_state(shutdown_signal);
 
-    // Set up the Rustls config
-    let config = RustlsConfig::from_pem(cert, pkey.private_key_to_pem_pkcs8().unwrap())
-        .await
-        .unwrap();
+//     // Set up the Rustls config
+//     let config = RustlsConfig::from_pem(cert, pkey.private_key_to_pem_pkcs8().unwrap())
+//         .await
+//         .unwrap();
 
-    // Start the server
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8001));
-    let server = axum_server::bind_rustls(addr, config)
-        .serve(receive_app.into_make_service());
+//     // Start the server
+//     let addr = SocketAddr::from(([0, 0, 0, 0], 8001));
+//     let server = axum_server::bind_rustls(addr, config)
+//         .serve(receive_app.into_make_service());
 
-    // Spawn the server and stop it as soon as a key is received
-    log::info!("waiting to receive shared key");
-    let key_hex = tokio::select! {
-        _ = server => todo!(),
-        key_hex = rx => key_hex
-    }.unwrap();
+//     // Spawn the server and stop it as soon as a key is received
+//     log::info!("waiting to receive shared key");
+//     let key_hex = tokio::select! {
+//         _ = server => todo!(),
+//         key_hex = rx => key_hex
+//     }.unwrap();
     
-    // store the key
-    log::info!("writing shared key");
-    let key_bytes = hex::decode(key_hex).unwrap();
-    fs::write(SHARED_KEY_PATH, &key_bytes)
-        .await
-        .expect("Failed to write shared key to file");
-    key_bytes
-}
+//     // store the key
+//     log::info!("writing shared key");
+//     let key_bytes = hex::decode(key_hex).unwrap();
+//     fs::write(SHARED_KEY_PATH, &key_bytes)
+//         .await
+//         .expect("Failed to write shared key to file");
+//     key_bytes
+// }
 
 #[tokio::main]
 async fn main() {

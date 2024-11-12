@@ -4276,7 +4276,6 @@ dependencies = [
  "log",
  "oauth1-request",
  "openai-rust",
- "openssl",
  "rand 0.8.5",
  "rayon",
  "reqwest 0.11.27",
