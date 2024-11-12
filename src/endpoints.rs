@@ -290,7 +290,8 @@ pub async fn check_redeem<A: TeleportDB>(
     Json(query): Json<CheckRedeemQuery>,
 ) -> Json<CheckRedeemResponse> {
     // let safe = oai::is_tweet_safe(&query.content, &query.policy).await;
-    let bu_reader = BufReader::new("./nft_ids.txt".as_bytes());
+    let file = std::fs::File::open("nft_ids.txt").expect("Failed to open nft_ids.txt");
+    let bu_reader = BufReader::new(file);
     let nft_ids = bu_reader
         .lines()
         .enumerate()
