@@ -309,11 +309,15 @@ pub async fn check_redeem<A: TeleportDB>(
         let (sender, tx_hash) = oneshot::channel();
 
         shared_state.nft_action_sender.send((nft_action, sender)).await.unwrap();
-        let tx_hash = tx_hash.await.unwrap();
-        Json(CheckRedeemResponse {
-            exists: true,
-            tx_hash: Some(tx_hash),
-        })
+        if let Ok(tx_hash) = tx_hash.await {
+            Json(CheckRedeemResponse {
+                exists: true,
+                tx_hash: Some(tx_hash),
+            })
+        } else {
+            log::error!("Failed to get tx hash, might have been redeemed already");
+            Json(CheckRedeemResponse { exists: true, tx_hash: None })
+        }
     } else {
         Json(CheckRedeemResponse { exists: false, tx_hash: None })
     }
